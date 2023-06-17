@@ -1,6 +1,5 @@
 # A distributed training demo for `tfra.dynamic_embedding`:
 
-- dataset: [movielen/100k-ratings](https://www.tensorflow.org/datasets/catalog/movielens#movielens100k-ratings)
 - model: DNN
 - Running API: using estimator APIs
 

@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+# coding=utf-8
 import tensorflow as tf
 
 tf = tf.compat.v1
@@ -32,7 +34,9 @@ def get_slot_list():
     slots = []
     with open("%s/../slot.conf" % dirname) as f:
         for l in f:
-            slots.extend(l.strip("\n").split("-"))
+            if l.startswith("#") or l.startswith("label"):
+                continue
+            slots.extend(re.split(" +", l.strip("\n"))[0].split("-"))
     return sorted(list(set(slots)))
 
 
@@ -44,8 +48,8 @@ def get_example_fmt():
             if line.startswith("#"):
                 continue
             name, type_str = re.split(" +", line.strip("\n"))[:2]
-            if name not in slots:
-                continue
+            # if name not in slots:
+            #     continue
             if "ARRAY" in line:
                 example_fmt[name] = tf.io.FixedLenFeature([50], _parse_type(type_str))
             else:
@@ -61,8 +65,10 @@ def get_sequence_example_fmt():
             if line.startswith("#"):
                 continue
             name, type_str = re.split(" +", line.strip("\n"))[:2]
-            if name not in slots:
-                continue
+            # if name.startswith("label"):
+            #     type_str = "FLOAT"
+            # if name not in slots:
+            #     continue
             if "@ctx" in line:
                 if "ARRAY" in line:
                     ctx_fmt[name] = tf.io.FixedLenFeature([50], _parse_type(type_str))
@@ -79,22 +85,16 @@ def get_sequence_example_fmt():
     return ctx_fmt, seq_fmt
 
 
-def input_fn(file_pattern, task_number=1, task_idx=0, shuffle=False, epochs=1, batch_size=1024):
-    def _parse_fn(example):
-        example_fmt = get_example_fmt()
-        features = tf.parse_single_example(example, example_fmt)
-        return features
+def input_fn(filenames, task_number=1, task_idx=0, shuffle=False, epochs=1, batch_size=128):
+    example_fmt = get_example_fmt()
 
     # Extract lines from input files using the Dataset API, can pass one filename or filename list
-    dataset = tf.data.Dataset.list_files(file_pattern)
+    dataset = tf.data.Dataset.from_tensor_slices(filenames)
     if task_number > 1:
         dataset = dataset.shard(task_number, task_idx)
 
     dataset = tf.data.TFRecordDataset(dataset, compression_type="GZIP")
-    dataset = dataset.apply(tf.data.experimental.ignore_errors())
     dataset = dataset.repeat(epochs).prefetch(10000)
-
-    dataset = dataset.map(_parse_fn, num_parallel_calls=10)
 
     # Randomizes input using a window of 256 elements (read into memory)
     if shuffle:
@@ -102,16 +102,16 @@ def input_fn(file_pattern, task_number=1, task_idx=0, shuffle=False, epochs=1, b
 
     # epochs from blending together.
     dataset = dataset.batch(batch_size)
+    dataset = dataset.map(lambda x: tf.io.parse_example(x, features=example_fmt), 10)
+    dataset = dataset.apply(tf.data.experimental.ignore_errors())
 
-    iterator = dataset.make_one_shot_iterator()
-
-    return iterator.get_next()
+    return dataset.make_one_shot_iterator().get_next()
 
 
 if __name__ == "__main__":
     tf.disable_v2_behavior()
     # from flags import FLAGS
-    file_pattern = "/part-r-00000.gz"
+    file_pattern = "/nas/lixiang/data/matchmaking_girls_to_newboys_v1/20230613/02/59/part-r-00000.gz"
     next_element = input_fn(file_pattern, shuffle=False)
 
     tmp = []
@@ -121,7 +121,7 @@ if __name__ == "__main__":
             while True:
                 # 通过session每次从数据集中取值
                 serialized_examples = sess.run(fetches=next_element)
-                print(tf.train.Example.FromString(serialized_examples))
+                print(serialized_examples)
                 break
                 # sess.run(fetches=train, feed_dict={x: image, y_: label})
                 # if i % 100 == 0:
@@ -141,3 +141,4 @@ if __name__ == "__main__":
     # for serialized_example in tf.io.tf_record_iterator(tfrecord_path, options=options):
     #     print(serialized_example)
     #     break
+

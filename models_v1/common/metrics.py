@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+# coding=utf-8
 import tensorflow as tf
 
 from tensorflow.python.framework import dtypes, ops
@@ -193,8 +195,17 @@ def sum_op(values,
         def compute_sum(_, c):
             return c
 
-        sum_t = _aggregate_across_replicas(
-            metrics_collections, compute_sum, count)
+        strategy = tf.compat.v1.distribute.get_strategy()
+        # sum_t = strategy.reduce("SUM", count, axis=None)
+
+        def value_fn(value_context):
+          return count
+        distributed_values = (
+            strategy.experimental_distribute_values_from_function(
+                value_fn))
+        def replica_fn(input):
+          return tf.distribute.get_replica_context().all_reduce("sum", input)
+        sum_t = strategy.run(replica_fn, args=(distributed_values,))
 
         if updates_collections:
             ops.add_to_collections(updates_collections, update_count_op)
@@ -203,7 +214,7 @@ def sum_op(values,
 
 
 def evaluate(label, pred, task, eval_metric_ops):
-    with tf.name_scope(task):
+    with tf.name_scope("metrics/%s" % task):
         auc = tf.compat.v1.metrics.auc(label, pred, num_thresholds=4068)
         eval_metric_ops['%s/auc' % task] = auc
         ctr, ctr_op = tf.compat.v1.metrics.mean(label)

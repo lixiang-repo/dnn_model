@@ -13,9 +13,9 @@ init() {
   fi
 }
 
-data_path="./data"
-#data_path="./"
-model_dir="/data/lixiang/recommenders-addons/demo/dynamic_embedding/data"
+nas_path="/nas/lixiang/data/matchmaking_girls_to_newboys_v1/"
+#nas_path="/nas/lixiang/data/matchmaking_girls_to_newboys_v1/"
+model_dir="/nas/lixiang/recommenders-addons/demo/dynamic_embedding/data"
 mkdir -p ${model_dir} && cd ${model_dir}
 start_date=202305080259
 end_date=
@@ -34,14 +34,14 @@ while [ "${last_time}" != "202505080259" ]; do
   hour_str=$(python3 -c "from dateutil.parser import parse;import datetime;print((parse(str("${last_time}")) + datetime.timedelta(days=1)).strftime('%Y%m%d/%H/%M'))")
   time_str=$(python3 -c "from dateutil.parser import parse;import datetime;print((parse(str("${last_time}")) + datetime.timedelta(days=1)).strftime('%Y%m%d%H%M'))")
 
-  if test -e ${data_path}/${hour_str}/_SUCCESS; then
-#    echo "start join_model>>>${time_str}>>>${data_path}/${hour_str}"
+  if test -e ${nas_path}/${hour_str}/_SUCCESS; then
+#    echo "start join_model>>>${time_str}>>>${nas_path}/${hour_str}"
 #    python3 ${main_py} --model_dir "${model_dir}/ckpt/join" --warm_path "${warm_path}" --mode train --type "join" --time_str "${time_str}" --time_format "%Y%m%d/*/*/*.gz" || exit 1
-#    echo "end join_model>>>${time_str}>>>${data_path}/${hour_str}"
+#    echo "end join_model>>>${time_str}>>>${nas_path}/${hour_str}"
     ############################################################
-    echo "start update_model>>>${time_str}>>>${data_path}/${hour_str}"
-    python3 ${main_py} --model_dir "${model_dir}/ckpt/update" --mode train --type "update" --data_path "${data_path}" --time_str "${time_str}" --time_format "%Y%m%d/*/*/*.gz" || exit 2
-    echo "end update_model>>>${time_str}>>>${data_path}/${hour_str}"
+    echo "start update_model>>>${time_str}>>>${nas_path}/${hour_str}"
+    python3 ${main_py} --model_dir "${model_dir}/ckpt/update" --mode train --type "update" --data_path "${nas_path}" --time_str "${time_str}" --time_format "%Y%m%d/*/*/*.gz" || exit 2
+    echo "end update_model>>>${time_str}>>>${nas_path}/${hour_str}"
 
     #backup
     cp -r ckpt ${time_str}

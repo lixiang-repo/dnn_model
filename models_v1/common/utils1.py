@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+# coding=utf-8
 import os
 import datetime
 import tensorflow as tf
@@ -7,6 +9,8 @@ from tensorflow.python.training import checkpoint_management
 from tensorflow.python.platform import gfile
 from collections import defaultdict
 from common.dataset import get_example_fmt, get_sequence_example_fmt
+
+dirname = os.path.dirname(os.path.abspath(__file__))
 
 
 def get_files(file_path, file_list, suffix=""):
@@ -30,49 +34,20 @@ def write_donefile(time_str, model_type):
 
 def serving_input_receiver_dense_fn():
     tf.compat.v1.disable_eager_execution()
+    feature_list = []
+    with open("%s/../slot.conf" % dirname) as f:
+        for line in f:
+            if line.startswith("#"):
+                continue
+            feature_list.extend(line.strip("\n").split(":"))
+    example_fmt = get_example_fmt()
+    feature_spec = {}
+    for k in example_fmt:
+        dtype = example_fmt[k].dtype
+        shape = (None,) + tuple(example_fmt[k].shape)
+        feature_spec[k] = tf.compat.v1.placeholder(dtype, shape, name=k)
 
-    def parser_for_sequence_example():
-        ctx_fmt, seq_fmt = get_sequence_example_fmt()
-
-        def parser(proto):
-            ctx_feat, seq_feat = tf.io.parse_single_sequence_example(tf.reshape(proto, ()), ctx_fmt, seq_fmt)
-            if len(seq_feat) == 0:
-                raise ValueError('atleast a column be marked @seq')
-            seq_item = list(seq_feat.values())[0]
-            len_seq = tf.shape(seq_item)[0]
-
-            def _tile(x, is_arr):
-                if is_arr:
-                    return tf.tile(tf.expand_dims(x, 0), [len_seq, 1])
-                else:
-                    return tf.repeat(x, len_seq)
-
-            tiled_ctx = dict()
-            for k, v in ctx_feat.items():
-                tiled_ctx[k] = _tile(v, len(ctx_fmt[k].shape) == 1)
-
-            return {**tiled_ctx, **seq_feat}
-
-        return parser
-
-    def parser_for_example():
-        def parser(proto):
-            example_fmt = get_example_fmt()
-            return tf.io.parse_example(tf.reshape(proto, [-1]), example_fmt)
-
-        return parser
-
-    seq_parser = parser_for_sequence_example()
-    exam_parser = parser_for_example()
-    record_type = tf.compat.v1.placeholder(tf.string, shape=(), name="record_type")
-    inp = tf.compat.v1.placeholder(tf.string, shape=(None,), name="input")
-    feats = tf.cond(
-        tf.equal(record_type, "SequenceExample"), lambda: seq_parser(inp), lambda: exam_parser(inp)
-    )
-    return tf.compat.v1.estimator.export.ServingInputReceiver(feats, {
-        "record_type": record_type,
-        "input": inp,
-    })
+    return tf.compat.v1.estimator.export.build_raw_serving_input_receiver_fn(feature_spec)
 
 
 def restore_tfra_variable(ckpt_path, variable):

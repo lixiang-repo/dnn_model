@@ -1,8 +1,7 @@
 containers:
   - name: triton-server
-    image: "nvcr.io/nvidia/tritonserver:22.05-py3"
+    image: "21.10"
     command: [ "/bin/bash" ]
-    # docker run --rm --net=host -v ${PWD}/model_repository:/models nvcr.io/nvidia/tritonserver:22.05-py3 bash -c "export LD_LIBRARY_PATH=/opt/tritonserver/backends/tensorflow2:$LD_LIBRARY_PATH && export LD_PRELOAD="/models/_cuckoo_hashtable_ops.so:/models/_math_ops.so:/usr/lib/$(uname -m)-linux-gnu/libjemalloc.so:${LD_PRELOAD}" && tritonserver --model-repository=/models/ --backend-config=tensorflow,version=2 --model-control-mode=poll --strict-model-config=false --strict-readiness=false"
     # About "backend-config": All backends are initialized; pytorch, tensorflow, openvino & onnxruntime.
     # We are overriding Tensorflow version to be loaded by default to 2 (Rest of them will still load)
     # --backend-config=tensorflow,version=2

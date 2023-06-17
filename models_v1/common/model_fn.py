@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+# coding=utf-8
 import tensorflow as tf
 
 import tensorflow_recommenders_addons as tfra
@@ -7,7 +9,7 @@ from common.metrics import evaluate
 from common.utils import RestoreTfraVariableHook
 from collections import OrderedDict
 from config import split_dict
-import os
+import os, re
 dirname = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -39,42 +41,48 @@ def model_fn(features, labels, mode, params):
     ######################slot reshape################################
     # (None,), (None, 50)
     mask_dict = {}
+    text_map = {}
     for k in features:
-        assert len(features[k].shape) in [1, 2]
         tf.compat.v1.logging.debug("features>>>%s>>>%s>>>%s" % (k, features[k].shape, features[k].dtype))
+        if k.startswith("label"):
+            continue
+        text_map[k] = features[k]
         ############bucketing#########
         if k in split_dict:
-            features[k] = build_bucket_custom(features, k, split_dict[k])
-        if features[k].dtype != tf.string and not k.startswith("label"):
-            features[k] = tf.as_string(features[k])
-        if len(features[k].shape) == 1:
-            features[k] = tf.reshape(features[k], [-1, 1])
+            text_map[k] = build_bucket_custom(text_map, k, split_dict[k])
+        if text_map[k].dtype != tf.string:
+            text_map[k] = tf.as_string(text_map[k])
+        if len(text_map[k].shape) == 1:
+            text_map[k] = tf.reshape(text_map[k], [-1, 1])
         else:
             tf.compat.v1.logging.debug("mask>>>%s" % k)
-            mask_dict[k] = mask_tensor(features[k])
+            mask_dict[k] = mask_tensor(text_map[k])
     ######################slot################################
-    hash_map = {}
     slot_list = []
+    hash_map = {}
     with open("%s/../slot.conf" % dirname) as f:
         for l in f:
-            l = l.strip("\n")
             if l.startswith("#") or l.startswith("label"):
                 continue
-            inputs = [get_table_name(k) for k in l.split("-")] + [features[k] for k in l.split("-")]
-            hash_map[l] = tf.strings.to_hash_bucket_fast(tf.strings.join(inputs, "\001"), 2 ** 63 - 1)
+            l = re.split(" +", l.strip("\n"))[0]
+            if l in slot_list: continue
             slot_list.append(l)
+            inputs = [get_table_name(k) for k in l.split("-")] + [text_map[k] for k in l.split("-")]
+            hash_map[l] = tf.strings.to_hash_bucket_fast(tf.strings.join(inputs, "\001\001"), 2 ** 63 - 1)
+    tf.compat.v1.logging.info("slot_list>>>%s" % slot_list)
     ######################devide################################
-    if params["type"] == "join" or not is_training:
-        initializer = tf.compat.v1.initializers.zeros()
-    else:
+    if is_training:
         initializer = tf.keras.initializers.RandomNormal(-1, 1)
-    if params["ps_num"] > 0:
+    else:
+        initializer = tf.compat.v1.initializers.zeros()
+    if is_training and params["ps_num"] > 0:
         ps_list = ["/job:ps/replica:0/task:{}/CPU:0".format(i) for i in range(params["ps_num"])]
     else:
         ps_list = ["/job:localhost/replica:0/task:0/CPU:0"] * params["ps_num"]  ##单机，分布式注释
     tf.compat.v1.logging.info("ps_list>>>%s" % ps_list)
     tf.compat.v1.logging.info("strategy>>>%s" % tf.compat.v1.distribute.get_strategy())
     ######################dnn################################
+    assert len(slot_list) == len(set(slot_list))
     feature_list = [hash_map[k] for k in slot_list]
     ids = tf.concat(feature_list, axis=1)  # [None, 1] concat
     tf.compat.v1.logging.debug("ids_shape>>>%s" % ids.shape)
@@ -85,6 +93,9 @@ def model_fn(features, labels, mode, params):
         devices=ps_list,
         trainable=params["type"] == "update",
         initializer=initializer)
+    policy = tfra.dynamic_embedding.TimestampRestrictPolicy(embeddings)
+    update_tstp_op = policy.apply_update(ids)
+    restrict_op = policy.apply_restriction(int(1e8))
     ######################lookup################################
     emb_shape = tf.concat([tf.shape(ids), [embedding_size]], axis=0)
     id_val, id_idx = tf.unique(tf.reshape(ids, (-1,)))
@@ -97,8 +108,8 @@ def model_fn(features, labels, mode, params):
     emb_splits = tf.split(emb_lookuped, num_or_size_splits, axis=1)
     assert len(emb_splits) == len(slot_list)
     emb_map = dict(zip(slot_list, emb_splits))
+    slot = params["slot"]
     for k in slot_list:
-        slot = params["slot"]
         if k == slot:
             emb_map[slot] = tf.zeros_like(emb_map[slot], dtype=tf.float32)
             tf.compat.v1.logging.debug("miss_slot:%s" % k)
@@ -119,9 +130,10 @@ def model_fn(features, labels, mode, params):
         eval_metric_ops = OrderedDict()
         for i, (label, prob) in enumerate(zip(model.labels, model.probs), start=1):
             evaluate(label, prob, "task%s" % i, eval_metric_ops)
-        groups = []
+        groups = [update_tstp_op, ]
+        if params["restrict"]: groups.append(restrict_op)
         for k in eval_metric_ops:
-            loggings[k] = eval_metric_ops[k][1]
+            loggings[k] = eval_metric_ops[k][0]
             groups.append(eval_metric_ops[k][1])
         if params["slot"]:
             eval_metric_ops['slot_%s' % params["slot"]] = eval_metric_ops[k]
@@ -129,11 +141,11 @@ def model_fn(features, labels, mode, params):
     ######################train################################
     if mode == tf.estimator.ModeKeys.TRAIN:
         ######################optimizer################################
-        # sparse_opt = tf.compat.v1.train.GradientDescentOptimizer(learning_rate=1)
-        sparse_opt = tf.compat.v1.train.AdamOptimizer(learning_rate=0.001)
+        sparse_opt = tf.compat.v1.train.GradientDescentOptimizer(learning_rate=1)
+        # sparse_opt = tf.compat.v1.train.AdamOptimizer(learning_rate=0.001)
         sparse_opt = tfra.dynamic_embedding.DynamicEmbeddingOptimizer(sparse_opt)
-        # dense_opt = tf.compat.v1.train.GradientDescentOptimizer(learning_rate=0.02 * params["lr"])
-        dense_opt = tf.compat.v1.train.AdamOptimizer(learning_rate=0.001 * params["lr"])
+        dense_opt = tf.compat.v1.train.GradientDescentOptimizer(learning_rate=0.02 * params["lr"])
+        # dense_opt = tf.compat.v1.train.AdamOptimizer(learning_rate=0.001 * params["lr"])
 
         trainable_variables = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES)
         dense_vars = [var for var in trainable_variables if not var.name.startswith("lookup")]
@@ -183,3 +195,4 @@ def model_fn(features, labels, mode, params):
         return tf.estimator.EstimatorSpec(mode, model.predictions, model.loss, export_outputs=export_outputs,
                                           prediction_hooks=_hooks, evaluation_hooks=_hooks,
                                           eval_metric_ops=eval_metric_ops)
+
