@@ -1,0 +1,70 @@
+containers:
+  - name: triton-server
+    image: "nvcr.io/nvidia/tritonserver:22.05-py3"
+    command: [ "/bin/bash" ]
+    # docker run --rm --net=host -v ${PWD}/model_repository:/models nvcr.io/nvidia/tritonserver:22.05-py3 bash -c "export LD_LIBRARY_PATH=/opt/tritonserver/backends/tensorflow2:$LD_LIBRARY_PATH && export LD_PRELOAD="/models/_cuckoo_hashtable_ops.so:/models/_math_ops.so:/usr/lib/$(uname -m)-linux-gnu/libjemalloc.so:${LD_PRELOAD}" && tritonserver --model-repository=/models/ --backend-config=tensorflow,version=2 --model-control-mode=poll --strict-model-config=false --strict-readiness=false"
+    # About "backend-config": All backends are initialized; pytorch, tensorflow, openvino & onnxruntime.
+    # We are overriding Tensorflow version to be loaded by default to 2 (Rest of them will still load)
+    # --backend-config=tensorflow,version=2
+    # Ref: https://github.com/triton-inference-server/tensorflow_backend/blob/40f9d94ca1243de004c609cf9b056de19462d545/README.md
+    # export LD_LIBRARY_PATH=/opt/tritonserver/backends/tensorflow2:$LD_LIBRARY_PATH && export LD_PRELOAD="/models/_cuckoo_hashtable_ops.so:/models/_math_ops.so:/usr/lib/$(uname -m)-linux-gnu/libjemalloc.so:${LD_PRELOAD}" && tritonserver --model-repository=/models/ --backend-config=tensorflow,version=2
+    args: [ "-c",
+      "export LD_LIBRARY_PATH=/opt/tritonserver/backends/tensorflow2:$LD_LIBRARY_PATH
+                 && export LD_PRELOAD="'/triton/lib/_sentencepiece_tokenizer.so /triton/lib/_normalize_ops.so 
+                  /triton/lib/_regex_split_ops.so /triton/lib/_wordpiece_tokenizer.so'"
+                 && tritonserver
+                 --model-repository=/models/triton
+                 --backend-config=tensorflow,version=2
+                 --log-verbose=5
+                 --log-info=true
+                 --log-warning=true
+                 --log-error=true
+                 --http-port=8000
+                 --grpc-port=8001
+                 --metrics-port=8002
+                 --model-control-mode=explicit
+                 --grpc-use-ssl=false"
+    ]
+    volumeMounts:
+      - mountPath: /models/triton
+        name: models
+      - mountPath: /triton/lib
+        name: libraries
+    imagePullPolicy: Always
+    livenessProbe:
+      failureThreshold: 5
+      httpGet:
+        path: /v2/health/live
+        port: http
+        scheme: HTTP
+      initialDelaySeconds: 10
+      periodSeconds: 5
+      successThreshold: 1
+      timeoutSeconds: 1
+    ports:
+      - containerPort: 8000
+        name: http
+        protocol: TCP
+      - containerPort: 8001
+        name: grpc
+        protocol: TCP
+      - containerPort: 8002
+        name: http-metrics
+        protocol: TCP
+    readinessProbe:
+      successThreshold: 1
+      failureThreshold: 3
+      initialDelaySeconds: 5
+      periodSeconds: 5
+      timeoutSeconds: 1
+      httpGet:
+        path: /v2/health/live
+        port: http
+        scheme: HTTP
+    resources:
+      requests:
+        cpu: 2
+        memory: 12G
+      limits:
+        cpu: 3
+        memory: 24G

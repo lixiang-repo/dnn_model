@@ -1,0 +1,103 @@
+{%- set name = "lx" -%}
+{%- set image = "registry.cn-hangzhou.aliyuncs.com/lixiang666/test:v2" -%}
+{%- set worker_replicas = 4 -%}
+{%- set ps_replicas = 1 -%}
+{%- set script = "a.sh" -%}
+{%- set data_dir = "/Users/lixiang/Desktop" -%}
+{%- set train_dir = "" -%}
+
+{%- set port = 4568 -%}
+{%- set replicas = {"worker": worker_replicas, "ps": ps_replicas} -%}
+
+{%- macro worker_hosts() -%}
+  {%- for i in range(worker_replicas) -%}
+    {%- if not loop.first -%},{%- endif -%}
+    {{ name }}-worker-{{ i }}:{{ port }}
+  {%- endfor -%}
+{%- endmacro -%}
+
+{%- macro ps_hosts() -%}
+  {%- for i in range(ps_replicas) -%}
+    {%- if not loop.first -%},{%- endif -%}
+    {{ name }}-ps-{{ i }}:{{ port }}
+  {%- endfor -%}
+{%- endmacro -%}
+
+{%- for job in ["worker", "ps"] -%}
+{%- for i in range(replicas[job]) -%}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ name }}-{{ job }}-{{ i }}
+  namespace: default
+spec:
+  selector:
+    name: {{ name }}
+    job: {{ job }}
+    task: "{{ i }}"
+  ports:
+  - port: {{ port }}
+    targetPort: {{ port }}
+---
+apiVersion: batch/v1
+kind: Job
+#apiVersion: apps/v1
+#kind: Deployment
+metadata:
+  name: {{ name }}-{{ job }}-{{ i }}
+  namespace: default
+spec:
+  ttlSecondsAfterFinished: 60
+  #replicas: 1
+  template:
+    metadata:
+      labels:
+        name: {{ name }}
+        job: {{ job }}
+        task: "{{ i }}"
+    spec:
+      containers:
+      - name: tf-{{ name }}-{{ job }}-{{ i }}
+        image: {{ image }}
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: {{ port }}
+{% if job == "tensorboard" %}
+        command:
+        - "tensorboard"
+        args:
+        - "--logdir={{ train_dir }}"
+{% else %}
+        command:
+        - "sh"
+        - "{{ script }}"
+        #args:
+        #- "--worker_hosts={{ worker_hosts().split(",") }}"
+        #- "--ps_hosts={{ ps_hosts().split(",") }}"
+        #- "--tf_confg={{ ps_hosts().split(",") }}"
+{% endif %}
+        env:
+        - name: TF_CONFIG
+          value: "{'cluster': {'ps': {{ ps_hosts().split(',') }}, 'chief': {{ worker_hosts().split(',')[:1] }}, 'worker': {{ worker_hosts().split(',')[1:] }}}, 'task': {'type': '{{ job }}', 'index': {{ i }}}}"
+
+        - name: JOB
+          value: {{ job }}
+        #resources:
+        #  limits:
+        #    memory: "128G"
+        #    cpu: "32"
+        #  requests:
+        #    memory: "96Gi"
+        #    cpu: "16"
+        volumeMounts:
+         - name: datadir
+           mountPath: {{ data_dir }}
+           readOnly: true
+      restartPolicy: Never
+      volumes:
+       - name: datadir
+         hostPath:
+           path: {{ data_dir }}
+---
+{% endfor %}
+{%- endfor -%}

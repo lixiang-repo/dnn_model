@@ -1,0 +1,346 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: lx-worker-0
+  namespace: default
+spec:
+  selector:
+    name: lx
+    job: worker
+    task: "0"
+  ports:
+    - port: 4568
+      targetPort: 4568
+---
+apiVersion: batch/v1
+kind: Job
+#apiVersion: apps/v1
+#kind: Deployment
+metadata:
+  name: lx-worker-0
+  namespace: default
+spec:
+  ttlSecondsAfterFinished: 60
+  #replicas: 1
+  template:
+    metadata:
+      labels:
+        name: lx
+        job: worker
+        task: "0"
+    spec:
+      containers:
+        - name: tf-lx-worker-0
+          image: registry.cn-hangzhou.aliyuncs.com/lixiang666/test:v2
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 4568
+
+          command:
+            - "sh"
+            - "a.sh"
+          #args:
+          #- "--worker_hosts=['lx-worker-0:4568', 'lx-worker-1:4568', 'lx-worker-2:4568', 'lx-worker-3:4568']"
+          #- "--ps_hosts=['lx-ps-0:4568']"
+          #- "--tf_confg=['lx-ps-0:4568']"
+
+          env:
+            - name: TF_CONFIG
+              value: "{'cluster': {'ps': ['lx-ps-0:4568'], 'chief': ['lx-worker-0:4568'], 'worker': ['lx-worker-1:4568', 'lx-worker-2:4568', 'lx-worker-3:4568']}, 'task': {'type': 'worker', 'index': 0}}"
+
+            - name: JOB
+              value: worker
+          #resources:
+          #  limits:
+          #    memory: "128G"
+          #    cpu: "32"
+          #  requests:
+          #    memory: "96Gi"
+          #    cpu: "16"
+          volumeMounts:
+            - name: datadir
+              mountPath: /Users/lixiang/Desktop
+              readOnly: true
+      restartPolicy: Never
+      volumes:
+        - name: datadir
+          hostPath:
+            path: /Users/lixiang/Desktop
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lx-worker-1
+  namespace: default
+spec:
+  selector:
+    name: lx
+    job: worker
+    task: "1"
+  ports:
+    - port: 4568
+      targetPort: 4568
+---
+apiVersion: batch/v1
+kind: Job
+#apiVersion: apps/v1
+#kind: Deployment
+metadata:
+  name: lx-worker-1
+  namespace: default
+spec:
+  ttlSecondsAfterFinished: 60
+  #replicas: 1
+  template:
+    metadata:
+      labels:
+        name: lx
+        job: worker
+        task: "1"
+    spec:
+      containers:
+        - name: tf-lx-worker-1
+          image: registry.cn-hangzhou.aliyuncs.com/lixiang666/test:v2
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 4568
+
+          command:
+            - "sh"
+            - "a.sh"
+          #args:
+          #- "--worker_hosts=['lx-worker-0:4568', 'lx-worker-1:4568', 'lx-worker-2:4568', 'lx-worker-3:4568']"
+          #- "--ps_hosts=['lx-ps-0:4568']"
+          #- "--tf_confg=['lx-ps-0:4568']"
+
+          env:
+            - name: TF_CONFIG
+              value: "{'cluster': {'ps': ['lx-ps-0:4568'], 'chief': ['lx-worker-0:4568'], 'worker': ['lx-worker-1:4568', 'lx-worker-2:4568', 'lx-worker-3:4568']}, 'task': {'type': 'worker', 'index': 1}}"
+
+            - name: JOB
+              value: worker
+          #resources:
+          #  limits:
+          #    memory: "128G"
+          #    cpu: "32"
+          #  requests:
+          #    memory: "96Gi"
+          #    cpu: "16"
+          volumeMounts:
+            - name: datadir
+              mountPath: /Users/lixiang/Desktop
+              readOnly: true
+      restartPolicy: Never
+      volumes:
+        - name: datadir
+          hostPath:
+            path: /Users/lixiang/Desktop
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lx-worker-2
+  namespace: default
+spec:
+  selector:
+    name: lx
+    job: worker
+    task: "2"
+  ports:
+    - port: 4568
+      targetPort: 4568
+---
+apiVersion: batch/v1
+kind: Job
+#apiVersion: apps/v1
+#kind: Deployment
+metadata:
+  name: lx-worker-2
+  namespace: default
+spec:
+  ttlSecondsAfterFinished: 60
+  #replicas: 1
+  template:
+    metadata:
+      labels:
+        name: lx
+        job: worker
+        task: "2"
+    spec:
+      containers:
+        - name: tf-lx-worker-2
+          image: registry.cn-hangzhou.aliyuncs.com/lixiang666/test:v2
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 4568
+
+          command:
+            - "sh"
+            - "a.sh"
+          #args:
+          #- "--worker_hosts=['lx-worker-0:4568', 'lx-worker-1:4568', 'lx-worker-2:4568', 'lx-worker-3:4568']"
+          #- "--ps_hosts=['lx-ps-0:4568']"
+          #- "--tf_confg=['lx-ps-0:4568']"
+
+          env:
+            - name: TF_CONFIG
+              value: "{'cluster': {'ps': ['lx-ps-0:4568'], 'chief': ['lx-worker-0:4568'], 'worker': ['lx-worker-1:4568', 'lx-worker-2:4568', 'lx-worker-3:4568']}, 'task': {'type': 'worker', 'index': 2}}"
+
+            - name: JOB
+              value: worker
+          #resources:
+          #  limits:
+          #    memory: "128G"
+          #    cpu: "32"
+          #  requests:
+          #    memory: "96Gi"
+          #    cpu: "16"
+          volumeMounts:
+            - name: datadir
+              mountPath: /Users/lixiang/Desktop
+              readOnly: true
+      restartPolicy: Never
+      volumes:
+        - name: datadir
+          hostPath:
+            path: /Users/lixiang/Desktop
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lx-worker-3
+  namespace: default
+spec:
+  selector:
+    name: lx
+    job: worker
+    task: "3"
+  ports:
+    - port: 4568
+      targetPort: 4568
+---
+apiVersion: batch/v1
+kind: Job
+#apiVersion: apps/v1
+#kind: Deployment
+metadata:
+  name: lx-worker-3
+  namespace: default
+spec:
+  ttlSecondsAfterFinished: 60
+  #replicas: 1
+  template:
+    metadata:
+      labels:
+        name: lx
+        job: worker
+        task: "3"
+    spec:
+      containers:
+        - name: tf-lx-worker-3
+          image: registry.cn-hangzhou.aliyuncs.com/lixiang666/test:v2
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 4568
+
+          command:
+            - "sh"
+            - "a.sh"
+          #args:
+          #- "--worker_hosts=['lx-worker-0:4568', 'lx-worker-1:4568', 'lx-worker-2:4568', 'lx-worker-3:4568']"
+          #- "--ps_hosts=['lx-ps-0:4568']"
+          #- "--tf_confg=['lx-ps-0:4568']"
+
+          env:
+            - name: TF_CONFIG
+              value: "{'cluster': {'ps': ['lx-ps-0:4568'], 'chief': ['lx-worker-0:4568'], 'worker': ['lx-worker-1:4568', 'lx-worker-2:4568', 'lx-worker-3:4568']}, 'task': {'type': 'worker', 'index': 3}}"
+
+            - name: JOB
+              value: worker
+          #resources:
+          #  limits:
+          #    memory: "128G"
+          #    cpu: "32"
+          #  requests:
+          #    memory: "96Gi"
+          #    cpu: "16"
+          volumeMounts:
+            - name: datadir
+              mountPath: /Users/lixiang/Desktop
+              readOnly: true
+      restartPolicy: Never
+      volumes:
+        - name: datadir
+          hostPath:
+            path: /Users/lixiang/Desktop
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lx-ps-0
+  namespace: default
+spec:
+  selector:
+    name: lx
+    job: ps
+    task: "0"
+  ports:
+    - port: 4568
+      targetPort: 4568
+---
+apiVersion: batch/v1
+kind: Job
+#apiVersion: apps/v1
+#kind: Deployment
+metadata:
+  name: lx-ps-0
+  namespace: default
+spec:
+  ttlSecondsAfterFinished: 60
+  #replicas: 1
+  template:
+    metadata:
+      labels:
+        name: lx
+        job: ps
+        task: "0"
+    spec:
+      containers:
+        - name: tf-lx-ps-0
+          image: registry.cn-hangzhou.aliyuncs.com/lixiang666/test:v2
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 4568
+
+          command:
+            - "sh"
+            - "a.sh"
+          #args:
+          #- "--worker_hosts=['lx-worker-0:4568', 'lx-worker-1:4568', 'lx-worker-2:4568', 'lx-worker-3:4568']"
+          #- "--ps_hosts=['lx-ps-0:4568']"
+          #- "--tf_confg=['lx-ps-0:4568']"
+
+          env:
+            - name: TF_CONFIG
+              value: "{'cluster': {'ps': ['lx-ps-0:4568'], 'chief': ['lx-worker-0:4568'], 'worker': ['lx-worker-1:4568', 'lx-worker-2:4568', 'lx-worker-3:4568']}, 'task': {'type': 'ps', 'index': 0}}"
+
+            - name: JOB
+              value: ps
+          #resources:
+          #  limits:
+          #    memory: "128G"
+          #    cpu: "32"
+          #  requests:
+          #    memory: "96Gi"
+          #    cpu: "16"
+          volumeMounts:
+            - name: datadir
+              mountPath: /Users/lixiang/Desktop
+              readOnly: true
+      restartPolicy: Never
+      volumes:
+        - name: datadir
+          hostPath:
+            path: /Users/lixiang/Desktop
+---
+
