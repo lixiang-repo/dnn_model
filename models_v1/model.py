@@ -3,33 +3,7 @@
 import tensorflow as tf
 from common.ple_networks import PleNetworks
 
-feat_map = {
-    "u_snd_sys_cnt": "i_snd_sys_cnt",
-    "u_snd_lnk_cnt": "i_snd_lnk_cnt",
-    "u_rec_sys_cnt": "i_rec_sys_cnt",
-    "u_rec_lnk_cnt": "i_rec_lnk_cnt",
-    "u_price_sum": "i_price_sum",
-    "u_ans_msg_rate": "i_ans_msg_rate",
-    "u_sys_no_ans": "i_sys_no_ans",
-    "u_sys_ans1": "i_sys_ans1",
-    "u_establish_sess": "i_establish_sess",
-    "u_valid_sess": "i_valid_sess",
-    "u_deep_sess": "i_deep_sess",
-    "u_last_deep_sess": "i_last_deep_sess",
-    "u_ans_uid_cnt": "i_ans_uid_cnt",
-    "u_rec_uid_cnt": "i_rec_uid_cnt",
-    "u_sess_cnt": "i_sess_cnt",
-    "u_ans_rate": "i_ans_rate"
-}
-
-
 def get_table_name(k):
-    if k in ['u_v_ans_uid', 'u_v_deep_uid']:
-        return 'i_uuid'
-    if k in ['i_v_ans_uid', 'i_v_deep_uid']:
-        return 'u_uuid'
-    if k in feat_map:
-        return feat_map[k]
     return k
 
 

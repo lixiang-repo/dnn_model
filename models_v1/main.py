@@ -42,7 +42,7 @@ ps_num = len(tf_config.get('cluster', {}).get('ps', []))
 task_number = len(tf_config.get('cluster', {}).get('worker', [])) + 1
 task_idx = task_idx + 1 if task_type == 'worker' else task_idx
 
-tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.DEBUG)
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)
 
 
 def train(filenames, params, model_config, steps=None):
@@ -96,13 +96,13 @@ def main(argv):
     assert FLAGS.type in ["join", "update"]
     assert FLAGS.mode in ["train", "eval", "infer", "export", "embeddings", "infer", "dump", "preview"]
     params = {
+        "mode": FLAGS.mode,
+        "type": FLAGS.type,
+        "ps_num": ps_num,
         "task_number": task_number,
         "task_type": task_type,
         "task_idx": task_idx,
-        "mode": FLAGS.mode,
         "warm_path": FLAGS.warm_path,
-        "ps_num": ps_num,
-        "type": FLAGS.type,
         "lr": FLAGS.lr,
         "slot": FLAGS.slot,
         "restrict": False
@@ -116,21 +116,27 @@ def main(argv):
             inter_op_parallelism_threads=os.cpu_count() // 2,
             intra_op_parallelism_threads=os.cpu_count() // 2))
 
-    if FLAGS.mode == "export":
-        train([], params, model_config)
-        return
 
     # filenames = ["/tf/data/matchmaking_girls_real_feas-tfrecord-train/part-r-00000.gz"]
     if len(FLAGS.file_list) == 0:
         time_format = parse(FLAGS.time_str).strftime(FLAGS.time_format)
         filenames = glob.glob("%s/%s" % (FLAGS.data_path, time_format))
-        while len(filenames) == 0:
+        while len(filenames) < 20:
             tf.compat.v1.logging.info("file not exits %s" % filenames)
-            time.sleep(60)
+            time.sleep(3600)
             filenames = glob.glob("%s/%s" % (FLAGS.data_path, time_format))
     else:
         with open(FLAGS.file_list) as f:
             filenames = [l.strip("\n") for l in f]
+
+    if FLAGS.mode == "export":
+        params["lr"] = 0.0
+        FLAGS.mode = "train"
+        train(filenames, params, model_config, 1)
+        params["warm_path"] = ""
+        FLAGS.mode = "export"
+        train([], params, model_config)
+        return
 
     tf.compat.v1.logging.info("filenames>>>%s" % filenames[:10])
     if FLAGS.mode == "train":
@@ -159,4 +165,3 @@ def main(argv):
 
 if __name__ == "__main__":
     app.run(main)
-
